@@ -7,6 +7,7 @@
  * - The whole chain shares one timeout, and only a limited part of the body is read.
  * - A fresh Agent per check means no sockets or TLS sessions are shared between users.
  */
+import type { LookupFunction } from 'node:net'
 import { Agent, fetch } from 'undici'
 import { BlockedTargetError, createSafeLookup, defaultUrlPolicy, isPublicAddress, parseTargetUrl } from './ssrf'
 import type { UrlPolicy } from './ssrf'
@@ -75,11 +76,11 @@ export async function safeFetch(input: string, options: SafeFetchOptions = {}): 
     connect: {
       timeout: connectTimeoutMs,
       // Wrap the safe lookup so we can report which IP we actually connected to.
-      lookup: ((hostname, opts, cb) =>
+      lookup: ((hostname: string, opts: { all?: boolean; family?: number }, cb: (...args: unknown[]) => void) =>
         safeLookup(hostname, opts, (err, address, family) => {
           if (!err) remoteAddress = Array.isArray(address) ? (address[0]?.address ?? null) : address
-          cb(err, address as string, family as number)
-        })) as typeof safeLookup,
+          cb(err, address, family)
+        })) as unknown as LookupFunction,
     },
     // Fail fast on slow servers; the overall signal below caps the whole chain anyway.
     headersTimeout: timeoutMs,
@@ -131,7 +132,7 @@ export async function safeFetch(input: string, options: SafeFetchOptions = {}): 
       })
 
       const contentType = headers['content-type'] ?? ''
-      const body = /html|xml/i.test(contentType) ? await readLimited(response.body, maxBodyBytes) : ''
+      const body = /html|xml/i.test(contentType) ? await readLimited(response.body as ReadableStream<Uint8Array> | null, maxBodyBytes) : ''
       if (!body) await response.body?.cancel().catch(() => {})
 
       return {

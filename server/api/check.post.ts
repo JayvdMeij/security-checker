@@ -45,7 +45,7 @@ export default defineEventHandler(async (event): Promise<CheckReport> => {
     'x-ratelimit-remaining': String(rate.remaining),
   })
   if (!rate.allowed) {
-    setResponseHeader(event, 'retry-after', String(rate.retryAfter))
+    setResponseHeader(event, 'retry-after', rate.retryAfter)
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `Too many checks. Try again in ${rate.retryAfter} seconds.` })
   }
 
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event): Promise<CheckReport> => {
   // 3. Cap concurrent outbound work.
   const release = concurrency.tryAcquire()
   if (!release) {
-    setResponseHeader(event, 'retry-after', '5')
+    setResponseHeader(event, 'retry-after', 5)
     throw createError({ statusCode: 503, statusMessage: 'Service Unavailable', message: 'The checker is busy. Please try again shortly.' })
   }
 
