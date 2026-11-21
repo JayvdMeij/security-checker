@@ -51,7 +51,15 @@ Configuration (environment variables, server-only):
 | `NUXT_RATE_LIMIT_LIMIT` | `10` | Checks per client per window |
 | `NUXT_RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window |
 | `NUXT_RATE_LIMIT_MAX_CONCURRENT` | `20` | Concurrent outbound checks for the whole server |
-| `NUXT_TRUST_PROXY` | `false` | Trust `X-Forwarded-For`. Only enable this behind a reverse proxy that overwrites the header |
+| `NUXT_TRUSTED_PROXY_HOPS` | `0` | Number of reverse proxies in front of the app. `0` ignores `X-Forwarded-For`; use `1` behind a single proxy such as Render's load balancer |
+
+## Deployment
+
+The app needs a server: the checks run in a Nuxt server route, so static hosting such as GitHub Pages does not work. A long-running Node process is the best fit, because the rate limiter keeps its state in memory.
+
+**Render (free plan).** `render.yaml` is a Blueprint. On Render choose *New → Blueprint*, select this repository and deploy. It builds with `npm ci && npm run build`, starts `node .output/server/index.mjs` on Node 24 and sets `NUXT_TRUSTED_PROXY_HOPS=1`. Free instances sleep after about 15 minutes without traffic, so the first request after that takes around half a minute.
+
+Serverless platforms (Netlify, Vercel) can also run Nuxt, but there the in-memory rate limiter is not reliable (many short-lived instances) and would need a shared store such as Redis.
 
 ## Architecture
 
@@ -105,7 +113,7 @@ The tests in `tests/unit/ssrf.test.ts` and `tests/unit/safeFetch.test.ts` cover 
 
 - **Per client:** sliding window, 10 checks per minute by default. Excess requests get `429 Too Many Requests` with a `Retry-After` header. `X-RateLimit-Limit`/`-Remaining` headers show the quota.
 - **IPv6 clients are grouped by /64**, because one user typically has a whole /64 and could otherwise rotate addresses to get a fresh quota.
-- **`X-Forwarded-For` is ignored** unless `NUXT_TRUST_PROXY=true`. Otherwise anyone could send a fake header and get a new quota on every request.
+- **`X-Forwarded-For` is read from the right.** Clients can send their own `X-Forwarded-For`, and every proxy *appends* the address it received the connection from. Only entries added by proxies we trust are reliable, so with `NUXT_TRUSTED_PROXY_HOPS=N` the client IP is the N-th entry from the right (`server/utils/clientIp.ts`). Many libraries, including h3's `getRequestIP`, take the *leftmost* entry, which the client controls, so anyone could get a fresh quota on every request. With the default `0` the header is ignored.
 - **Concurrency cap:** at most 20 outbound checks at once for the whole server (`503` beyond that).
 - **Bounded memory:** the limiter tracks at most 10,000 clients and fails closed when full.
 - **Limitation:** the state lives in memory in one process. It resets on restart and is not shared between instances. For a multi-instance deployment, use a shared store (Redis) or a limit at the reverse proxy / CDN.
