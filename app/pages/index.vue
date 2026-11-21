@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import type { CheckReport } from '#shared/types'
+import { useHistoryStore } from '~/stores/history'
+
+const route = useRoute()
+const history = useHistoryStore()
 
 const report = ref<CheckReport | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+// "Check again" links prefill the form; a check is never started just by opening a link.
+const initialUrl = computed(() => (typeof route.query.url === 'string' ? route.query.url.slice(0, 2048) : ''))
 
 async function runCheck(url: string) {
   loading.value = true
   error.value = null
   try {
     report.value = await $fetch<CheckReport>('/api/check', { method: 'POST', body: { url } })
+    history.add(report.value)
   } catch (e: unknown) {
     report.value = null
     const data = (e as { data?: { message?: string } }).data
@@ -27,7 +35,7 @@ async function runCheck(url: string) {
       <p class="text-slate-600">
         Enter a URL to see how well it uses HTTPS and security headers like CSP and HSTS, with a score and an explanation per header.
       </p>
-      <UrlForm :loading="loading" @submit="runCheck" />
+      <UrlForm :loading="loading" :initial-url="initialUrl" @submit="runCheck" />
     </section>
 
     <p v-if="error" class="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800" role="alert" data-testid="error">
