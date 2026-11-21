@@ -13,6 +13,8 @@ export default defineNuxtConfig({
     // 0 = ignore the header (clients could spoof it). Set NUXT_TRUSTED_PROXY_HOPS=1 behind one proxy
     // (e.g. Render, Fly.io). See server/utils/clientIp.ts.
     trustedProxyHops: 0,
+    // NUXT_DEBUG_CLIENT_IP=true enables GET /api/debug/client-ip (proxy diagnostics). Keep off.
+    debugClientIp: false,
     rateLimit: {
       limit: 10, // checks per window per client (NUXT_RATE_LIMIT_LIMIT)
       windowMs: 60_000, // NUXT_RATE_LIMIT_WINDOW_MS
