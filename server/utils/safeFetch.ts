@@ -45,6 +45,8 @@ export interface SafeFetchOptions {
   timeoutMs?: number
   connectTimeoutMs?: number
   maxRedirects?: number
+  /** When false, a redirect response is returned as-is instead of followed. */
+  followRedirects?: boolean
   maxBodyBytes?: number
   urlPolicy?: UrlPolicy
   /** Overridable for tests only. */
@@ -60,6 +62,7 @@ export async function safeFetch(input: string, options: SafeFetchOptions = {}): 
     timeoutMs = 8000,
     connectTimeoutMs = 5000,
     maxRedirects = 5,
+    followRedirects = true,
     maxBodyBytes = 512 * 1024,
     urlPolicy = defaultUrlPolicy,
     resolver,
@@ -104,7 +107,7 @@ export async function safeFetch(input: string, options: SafeFetchOptions = {}): 
       })
 
       const location = response.headers.get('location')
-      if (REDIRECT_STATUSES.has(response.status) && location) {
+      if (followRedirects && REDIRECT_STATUSES.has(response.status) && location) {
         await response.body?.cancel()
         redirects.push({ url: url.href, status: response.status, location })
         if (hop >= maxRedirects) {
@@ -194,7 +197,7 @@ function toSafeFetchError(error: unknown, signal: AbortSignal): SafeFetchError {
     if (name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code.includes('TIMEOUT')) {
       return new SafeFetchError('timeout', 'The site took too long to respond')
     }
-    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || code === 'ENODATA') {
+    if (['ENOTFOUND', 'EAI_AGAIN', 'ENODATA', 'ENOENT', 'ESERVFAIL'].includes(code)) {
       return new SafeFetchError('dns', 'The domain name could not be resolved')
     }
     if (code.startsWith('ERR_TLS') || code.includes('CERT') || code === 'EPROTO') {
