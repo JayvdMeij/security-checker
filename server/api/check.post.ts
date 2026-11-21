@@ -50,6 +50,13 @@ export default defineEventHandler(async (event): Promise<CheckReport> => {
   }
 
   // 2. Validate the request body (small JSON with a string url).
+  //    Requiring application/json is also a CSRF defence: a cross-site HTML form can only send
+  //    urlencoded/multipart/text bodies, and a cross-site fetch with JSON needs a CORS preflight,
+  //    which fails because we send no CORS headers.
+  const contentType = getRequestHeader(event, 'content-type') ?? ''
+  if (!/^application\/json\b/i.test(contentType)) {
+    throw createError({ statusCode: 415, statusMessage: 'Unsupported Media Type', message: 'Send the URL as JSON.' })
+  }
   const contentLength = Number(getRequestHeader(event, 'content-length') ?? 0)
   if (contentLength > MAX_BODY_BYTES) {
     throw createError({ statusCode: 413, statusMessage: 'Payload Too Large', message: 'Request body too large.' })

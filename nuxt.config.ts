@@ -2,9 +2,10 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   devtools: { enabled: false },
-  modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt'],
+  modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', 'nuxt-security'],
   tailwindcss: { cssPath: '~/assets/css/main.css', viewer: false },
   typescript: { strict: true },
+
   runtimeConfig: {
     // Server-only. Override with NUXT_TRUST_PROXY=true when running behind a reverse proxy
     // that sets X-Forwarded-For; otherwise clients could spoof their IP to evade rate limiting.
@@ -15,6 +16,75 @@ export default defineNuxtConfig({
       maxConcurrent: 20, // concurrent outbound checks for the whole server
     },
   },
+
+  /**
+   * Security headers for Site Check itself (nuxt-security).
+   * Everything is spelled out explicitly instead of relying on module defaults.
+   */
+  security: {
+    // A fresh random nonce per SSR response, added to Nuxt's own <script>/<style> tags
+    // and to the CSP below. Injected scripts don't know the nonce and won't run.
+    nonce: true,
+    // Subresource Integrity hashes on our bundled JS/CSS.
+    sri: true,
+    hidePoweredBy: true,
+    headers: {
+      contentSecurityPolicy: {
+        'default-src': ["'none'"], // deny everything not explicitly allowed below
+        'script-src': ["'self'", "'nonce-{{nonce}}'", "'strict-dynamic'"],
+        'script-src-attr': ["'none'"], // no inline event handlers (onclick=...)
+        'style-src': ["'self'", "'nonce-{{nonce}}'"],
+        'img-src': ["'self'", 'data:'],
+        'font-src': ["'self'"],
+        'connect-src': ["'self'"], // the browser only talks to our own API
+        'manifest-src': ["'self'"],
+        'base-uri': ["'none'"],
+        'form-action': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        'object-src': ["'none'"],
+        'upgrade-insecure-requests': true,
+      },
+      strictTransportSecurity: { maxAge: 31_536_000, includeSubdomains: true },
+      xFrameOptions: 'DENY',
+      xContentTypeOptions: 'nosniff',
+      referrerPolicy: 'no-referrer',
+      permissionsPolicy: {
+        accelerometer: [],
+        autoplay: [],
+        camera: [],
+        'display-capture': [],
+        'encrypted-media': [],
+        fullscreen: [],
+        geolocation: [],
+        gyroscope: [],
+        magnetometer: [],
+        microphone: [],
+        midi: [],
+        payment: [],
+        'picture-in-picture': [],
+        'publickey-credentials-get': [],
+        usb: [],
+      },
+      crossOriginOpenerPolicy: 'same-origin',
+      crossOriginResourcePolicy: 'same-origin',
+      crossOriginEmbedderPolicy: process.env.NODE_ENV === 'development' ? 'unsafe-none' : 'require-corp',
+      originAgentCluster: '?1',
+      xDNSPrefetchControl: 'off',
+      xDownloadOptions: 'noopen',
+      xPermittedCrossDomainPolicies: 'none',
+      xXSSProtection: '0', // the legacy XSS auditor caused more problems than it solved
+    },
+    // Our own tested limiter protects /api/check (see server/utils/rateLimit.ts).
+    rateLimiter: false,
+    // Same-origin API: send no CORS headers at all, so other sites cannot read responses.
+    corsHandler: false,
+    requestSizeLimiter: { maxRequestSizeInBytes: 16_384, maxUploadFileRequestInBytes: 16_384, throwError: true },
+    allowedMethodsRestricter: { methods: ['GET', 'HEAD', 'POST'], throwError: true },
+    // XSS is prevented by output encoding (Vue interpolation, no v-html) and the CSP,
+    // not by pattern-matching request bodies, which would also reject legitimate URLs.
+    xssValidator: false,
+  },
+
   app: {
     head: {
       htmlAttrs: { lang: 'en' },
