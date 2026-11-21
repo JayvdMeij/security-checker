@@ -9,9 +9,10 @@ export default defineNuxtConfig({
   typescript: { strict: true },
 
   runtimeConfig: {
-    // Server-only. Override with NUXT_TRUST_PROXY=true when running behind a reverse proxy
-    // that sets X-Forwarded-For; otherwise clients could spoof their IP to evade rate limiting.
-    trustProxy: false,
+    // Server-only. Number of reverse proxies in front of the app that append to X-Forwarded-For.
+    // 0 = ignore the header (clients could spoof it). Set NUXT_TRUSTED_PROXY_HOPS=1 behind one proxy
+    // (e.g. Render, Fly.io). See server/utils/clientIp.ts.
+    trustedProxyHops: 0,
     rateLimit: {
       limit: 10, // checks per window per client (NUXT_RATE_LIMIT_LIMIT)
       windowMs: 60_000, // NUXT_RATE_LIMIT_WINDOW_MS

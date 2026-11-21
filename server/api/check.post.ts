@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto'
 import { scoreSite, MAX_SCORE } from '#shared/scoring'
 import type { CheckReport } from '#shared/types'
+import { resolveClientIp } from '../utils/clientIp'
 import { extractPageInfo } from '../utils/pageInfo'
 import { createConcurrencyLimiter, createRateLimiter } from '../utils/rateLimit'
 import { safeFetch, SafeFetchError } from '../utils/safeFetch'
@@ -36,9 +37,13 @@ const ERROR_STATUS: Record<SafeFetchErrorCode, number> = {
 export default defineEventHandler(async (event): Promise<CheckReport> => {
   setResponseHeader(event, 'cache-control', 'no-store')
 
-  // 1. Rate limit per client. X-Forwarded-For is only trusted when explicitly configured,
-  //    otherwise anyone could send a fake header to get a fresh quota on every request.
-  const ip = getRequestIP(event, { xForwardedFor: Boolean(config.trustProxy) }) ?? 'unknown'
+  // 1. Rate limit per client. X-Forwarded-For is only used when a trusted proxy count is configured,
+  //    and then read from the right, so clients cannot choose their own IP (see utils/clientIp.ts).
+  const ip = resolveClientIp(
+    getRequestHeader(event, 'x-forwarded-for'),
+    event.node.req.socket.remoteAddress,
+    Number(config.trustedProxyHops) || 0,
+  )
   const rate = limiter.hit(ip)
   setResponseHeaders(event, {
     'x-ratelimit-limit': String(rate.limit),
