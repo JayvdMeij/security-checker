@@ -4,6 +4,8 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', 'nuxt-security'],
   tailwindcss: { cssPath: '~/assets/css/main.css', viewer: false },
+  // Tailwind 3.4.19 no longer ships the nesting plugin the module tries to add; we don't use nesting.
+  postcss: { plugins: { 'tailwindcss/nesting': false } },
   typescript: { strict: true },
 
   runtimeConfig: {
@@ -28,6 +30,8 @@ export default defineNuxtConfig({
     // Subresource Integrity hashes on our bundled JS/CSS.
     sri: true,
     hidePoweredBy: true,
+    // removeLoggers relies on esbuild options that Nuxt 4 (oxc) ignores; the client has no logging anyway.
+    removeLoggers: false,
     headers: {
       contentSecurityPolicy: {
         'default-src': ["'none'"], // deny everything not explicitly allowed below
