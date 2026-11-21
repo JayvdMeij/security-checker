@@ -51,13 +51,23 @@ Configuration (environment variables, server-only):
 | `NUXT_RATE_LIMIT_LIMIT` | `10` | Checks per client per window |
 | `NUXT_RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window |
 | `NUXT_RATE_LIMIT_MAX_CONCURRENT` | `20` | Concurrent outbound checks for the whole server |
-| `NUXT_TRUSTED_PROXY_HOPS` | `0` | Number of reverse proxies in front of the app. `0` ignores `X-Forwarded-For`; use `1` behind a single proxy such as Render's load balancer |
+| `NUXT_TRUSTED_PROXY_HOPS` | `0` | Number of reverse proxies in front of the app. `0` ignores `X-Forwarded-For`. On `*.onrender.com` it is `3` (see Deployment) |
+| `NUXT_DEBUG_CLIENT_IP` | `false` | Enables `GET /api/debug/client-ip`, which shows the IP headers of your own request. Only for setting up the proxy hops; turn it off afterwards |
 
 ## Deployment
 
 The app needs a server: the checks run in a Nuxt server route, so static hosting such as GitHub Pages does not work. A long-running Node process is the best fit, because the rate limiter keeps its state in memory.
 
-**Render (free plan).** `render.yaml` is a Blueprint. On Render choose *New → Blueprint*, select this repository and deploy. It builds with `npm ci && npm run build`, starts `node .output/server/index.mjs` on Node 24 and sets `NUXT_TRUSTED_PROXY_HOPS=1`. Free instances sleep after about 15 minutes without traffic, so the first request after that takes around half a minute.
+**Render (free plan).** `render.yaml` is a Blueprint. On Render choose *New → Blueprint*, select this repository and deploy. It builds with `npm ci && npm run build`, starts `node .output/server/index.mjs` on Node 24 and sets `NUXT_TRUSTED_PROXY_HOPS=3`. Free instances sleep after about 15 minutes without traffic, so the first request after that takes around half a minute.
+
+Why 3: on `*.onrender.com` a request passes three proxies, and each one appends to `X-Forwarded-For`:
+
+```
+X-Forwarded-For: <whatever the client sent>, <client IP>, <Cloudflare edge IP>, <Render internal LB IP>
+                                              └ added by Cloudflare  └ added by Render edge  └ added by internal LB
+```
+
+The client IP is therefore the 3rd entry from the right. This was measured with the diagnostic endpoint, not assumed. A value of 1 or 2 picks a proxy address that rotates between requests, which makes the rate limit either far too coarse or trivially bypassable. If you use a custom domain or Render changes its infrastructure, re-check with `NUXT_DEBUG_CLIENT_IP=true`.
 
 Serverless platforms (Netlify, Vercel) can also run Nuxt, but there the in-memory rate limiter is not reliable (many short-lived instances) and would need a shared store such as Redis.
 
